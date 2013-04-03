@@ -1,4 +1,7 @@
 <?php
+
+// Parse commandline arguments in regular Unix style.
+// ex. php file.php --foo=bar -abc -AB 'hello world' --baz
 function getArgs($args)
 {
     //function getArgs($args) by: B Crawford @php.net
@@ -27,6 +30,7 @@ function getArgs($args)
     return $out;
 }
 
+// Target URLs to POST attempts to.
 $urls  = array('http://almamater.xkcd.com/?edu=umbc.edu');
 
 $data = array(
@@ -41,6 +45,7 @@ $options = array(
     )
 );
 
+// If there is no starting value passed from args, generate random within the step.
 $start   = "" . rand(100,99999);
 $args    = getArgs($_SERVER['argv']);
 
@@ -51,21 +56,26 @@ if (isset($args['n'])) {
 $iter          = gmp_init($start, 10);
 $lowestWord    = 'x';
 $lowestBitDiff = 430; // Don't bother sending hashes with more than 430 diff
-$step          = gmp_init('100000', 10);
+$step          = gmp_init('100000', 10); // step of 100000 allows for 100000 independent processes to not overlap
 $precalmod     = gmp_add(gmp_mul($step, gmp_init('2000', 10)), $iter);
 $target        = gmp_init('5b4da95f5fa08280fc9879df44f418c8f9f12ba424b7757de02bbdfbae0d4c4fdf9317c80cc5fe04c6429073466cf29706b8c25999ddd2f6540d4475cc977b87f4757be023f19b8f4035d7722886b78869826de916a79cf9c94cc79cd4347d24b567aa3e2390a573a373a48a5e676640c79cc70197e1c5e7f902fb53ca1858b6', 16);
 
 while (true) {
     $tempWord = gmp_strval($iter, 62);
 	
+    // Periodically output status to let us know it's alive.
     if (gmp_cmp(gmp_mod($iter, $precalmod), "0") == 0) {
         echo '.....searching.....' . $tempWord . "\n";
     }
 	
+    // Increment the counter by the step.
     $iter        = gmp_add($iter, $step);
-	
+
+    // Calculate 1024 skein hash, and calculate the hamming distance between it and the target hash;
     $tempBitDiff = gmp_hamdist(gmp_init(skein_hash_hex($tempWord, 1024), 16), $target); // memory leak.... why!?
-	
+
+    // If the hamming distance is less than the previous lowest, update the lowest values and
+    // POST the results to each url.
     if ($tempBitDiff < $lowestBitDiff) {
         $lowestBitDiff = $tempBitDiff;
         $lowestWord    = $tempWord;
@@ -76,9 +86,9 @@ while (true) {
         $options['http']['content'] = http_build_query($data);
         $context                    = stream_context_create($options);
 		
-		foreach ($urls as &$url){
-			$result     = file_get_contents($url, false, $context);
-		}
+        foreach ($urls as &$url){
+            $result = file_get_contents($url, false, $context);
+        }
 		
         var_dump($result);
     }
